@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  bot_multi:
+    build: .
+    container_name: bot_multi
+    command: python3 bot_multi.py
+    volumes:
+      - ./models:/app/models
+      - ./images:/app/images
+    restart: unless-stopped
+
+  entry_bot:
+    build: .
+    container_name: entry_bot
+    command: python3 entry_bot.py
+    volumes:
+      - ./models:/app/models
+      - ./images:/app/images
+    restart: unless-stopped
