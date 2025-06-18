@@ -3,3 +3,7 @@ pandas
 ta
 requests
 joblib
+scikit-learn
+matplotlib
+mplfinance
+pushbullet.py
