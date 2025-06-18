@@ -36,16 +36,34 @@ def calculate_levels(df, window=3, num_levels=3, min_distance=30):
         return filtered
     return filter_levels(swing_lows)[:num_levels], filter_levels(swing_highs)[-num_levels:]
 
-def analyze_entry(symbol, entry_price, entry_type, df):
+def analyze_entry(symbol, entry_price, entry_type, df, entry_usdt=50, leverage=5):
     supports, resistances = calculate_levels(df)
     nearest_support = max([s for s in supports if s < entry_price], default=entry_price - 100)
     nearest_resistance = min([r for r in resistances if r > entry_price], default=entry_price + 150)
-    stop_loss, take_profit = (nearest_support, nearest_resistance) if entry_type == 'long' else (nearest_resistance, nearest_support)
+
+    if entry_type == 'long':
+        stop_loss, take_profit = nearest_support, nearest_resistance
+    else:
+        stop_loss, take_profit = nearest_resistance, nearest_support
+
+    # Tính khối lượng (số coin)
+    volume = (entry_usdt * leverage) / entry_price
+
+    # Tính lời/lỗ
+    if entry_type == 'long':
+        tp_profit = (take_profit - entry_price) * volume
+        sl_loss = (entry_price - stop_loss) * volume
+    else:
+        tp_profit = (entry_price - take_profit) * volume
+        sl_loss = (stop_loss - entry_price) * volume
+
     trend_msg = f"=== PHÂN TÍCH LỆNH '{entry_type.upper()} {entry_price}' ({symbol}) ===\n"
     trend_msg += f"🕒 {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
     trend_msg += f"💵 Giá vào lệnh: {entry_price}\n"
-    trend_msg += f"🔻 Cắt lỗ: {stop_loss:.2f}\n"
-    trend_msg += f"🔺 Chốt lời: {take_profit:.2f}\n"
+    trend_msg += f"💰 Vốn: {entry_usdt} USDT, Đòn bẩy: x{leverage}\n"
+    trend_msg += f"📊 Khối lượng ước tính: {volume:.4f} {symbol.split('/')[0]}\n"
+    trend_msg += f"🔺 Chốt lời: {take_profit:.2f} (+{tp_profit:.2f} USDT)\n"
+    trend_msg += f"🔻 Cắt lỗ: {stop_loss:.2f} (-{sl_loss:.2f} USDT)\n"
     trend_msg += f"📉 Hỗ trợ: {', '.join([f'{s:.2f}' for s in supports])}\n"
     trend_msg += f"📈 Kháng cự: {', '.join([f'{r:.2f}' for r in resistances])}"
     return trend_msg
@@ -67,14 +85,16 @@ def listen_pushbullet():
             if push['iden'] != last_push_id:
                 last_push_id = push['iden']
                 text = push.get("body", "").lower().strip()
-                match = re.match(r'^(long|short)\s+(\d+(\.\d+)?)\s+([a-z]{3,5}/[a-z]{3,5})$', text)
+                match = re.match(r'^(long|short)\s+(\d+(\.\d+)?)\s+(\d+)\s+(\d+)\s+([a-z]{3,5}/[a-z]{3,5})$', text)
                 if match:
                     entry_type = match.group(1)
                     entry_price = float(match.group(2))
-                    symbol = match.group(4).upper()
+                    entry_usdt = float(match.group(4))
+                    leverage = int(match.group(5))
+                    symbol = match.group(6).upper()
                     df = data_map.get(symbol.lower())
                     if df is not None:
-                        msg = analyze_entry(symbol, entry_price, entry_type, df)
+                        msg = analyze_entry(symbol, entry_price, entry_type, df, entry_usdt, leverage)
                         pb.push_note("Phân tích lệnh", msg)
                     else:
                         pb.push_note("Lỗi", f"Không tìm thấy dữ liệu cho {symbol}")
